@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from utils import load_data
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
 dropout_rate = 0.25
 # device = torch.device("cpu")
 
@@ -13,10 +13,10 @@ class EncodeSentence(nn.Module):
     def __init__(self, n_words, word_dim, wordEmbedding=None, use_lstm=False):
         super(EncodeSentence, self).__init__()
         self.use_lstm = use_lstm
-        if wordEmbedding:
-            self.word_emb = nn.Embedding.from_pretrained(wordEmbedding)
-        else:
+        if wordEmbedding is None:
             self.word_emb = nn.Embedding(n_words, word_dim, padding_idx=0)
+        else:
+            self.word_emb = nn.Embedding.from_pretrained(wordEmbedding, freeze=False)
         if use_lstm:
             self.bilstm = nn.LSTM(word_dim, word_dim//2, dropout=dropout_rate, batch_first=True, bidirectional=True)
 
@@ -32,10 +32,10 @@ class FeedForward(nn.Module):
     def __init__(self, n_tags, tag_dim, word_dim, tagEmbedding=None, hidden_dim=150):
         super(FeedForward, self).__init__()
         self.n_tags = n_tags
-        if tagEmbedding:
-            self.tag_emb = nn.Embedding.from_pretrained(tagEmbedding)
+        if tagEmbedding is None:
+            self.tag_emb = nn.Embedding(n_tags, tag_dim)
         else:
-            self.tag_emb = nn.Embedding(n_tags, tag_dim, padding_idx=0)
+            self.tag_emb = nn.Embedding.from_pretrained(tagEmbedding)
         self.fc1 = nn.Linear(word_dim+2*tag_dim, hidden_dim)
         self.fc2 = nn.Linear(hidden_dim, 1)
         self.dropout = nn.Dropout(dropout_rate)

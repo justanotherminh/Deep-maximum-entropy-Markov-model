@@ -1,18 +1,19 @@
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
-from sklearn.utils import shuffle
 
-from utils import load_data, remove_hyperlink, get_vocab_idx, convert_to_idx, pad_sents, data_iterator
+from sklearn.utils import shuffle
+from utils import load_data, remove_hyperlink, remove_outofvocab, get_vocab_idx, convert_to_idx, pad_sents, data_iterator
 from model import EncodeSentence, FeedForward
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
 # device = torch.device("cpu")
 print("Using {}".format(device))
 word_dim = 150
 tag_dim = 5
-use_lstm = True
-train_iter = 30
+use_lstm = False
+train_iter = 35
+use_word2vec = False
 
 train_sents, train_tags = load_data('data/twitter1_train.txt')
 test_sents, test_tags = load_data('data/twitter1_test.txt')
@@ -20,17 +21,41 @@ test_sents, test_tags = load_data('data/twitter1_test.txt')
 remove_hyperlink(train_sents)
 remove_hyperlink(test_sents)
 
-vocab2idx = get_vocab_idx(train_sents, test_sents)
+vocab2idx = get_vocab_idx(train_sents)
 vocab2idx["<PAD>"] = 0  # Added just for the sake of completion
+vocab2idx["<UNK>"] = len(vocab2idx)  # Out-of-vocab words
 tag2idx = {"<START>": 0, "O": 1, "T-NEG": 2, "T-NEU": 3, "T-POS": 4}
 idx2tag = ["<START>", "O", "T-NEG", "T-NEU", "T-POS"]
 
+if use_word2vec:
+    import os
+    if os.path.exists("word2vec.pt"):
+        word_emb = torch.load("word2vec.pt")
+    else:
+        from gensim.models import Word2Vec
+        from gensim.models import KeyedVectors
+        from gensim.test.utils import datapath
+        print("Loading Word2Vec vectors")
+        wv_from_bin = KeyedVectors.load_word2vec_format(datapath("/homes/cs577/hw2/w2v.bin"), binary=True)
+        print("Finished loading vectors")
+
+        word_emb = 0.1 * torch.randn(len(vocab2idx), 300)
+        for word, idx in vocab2idx.items():
+            if word in wv_from_bin.wv.vocab:
+                word_emb[idx] = torch.from_numpy(wv_from_bin[word])
+        torch.save(word_emb, "word2vec.pt")
+    word_dim = word_emb.size(1)
+
+remove_outofvocab(test_sents, vocab2idx)
 convert_to_idx(train_sents, vocab2idx)
 convert_to_idx(test_sents, vocab2idx)
 convert_to_idx(train_tags, tag2idx)
 convert_to_idx(test_tags, tag2idx)
 
-encoder = EncodeSentence(len(vocab2idx), word_dim, use_lstm=use_lstm).to(device)
+if use_word2vec:
+    encoder = EncodeSentence(len(vocab2idx), word_dim, wordEmbedding=word_emb, use_lstm=use_lstm).to(device)
+else:
+    encoder = EncodeSentence(len(vocab2idx), word_dim, use_lstm=use_lstm).to(device)
 model = FeedForward(len(tag2idx), tag_dim, word_dim).to(device)
 optimizer = optim.Adam(list(model.parameters())+list(encoder.parameters()))
 

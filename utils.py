@@ -34,6 +34,13 @@ def remove_hyperlink(sents):
                 sent[i] = "<HTTP>"
 
 
+def remove_outofvocab(sents, vocab):
+    for sent in sents:
+        for i in range(len(sent)):
+            if sent[i] not in vocab:
+                sent[i] = "<UNK>"
+
+
 def remove_rare_words(sents, min_count=1):
     token_count = count_tokens(sents)
     for sent in sents:
@@ -42,11 +49,9 @@ def remove_rare_words(sents, min_count=1):
                 sent[i] = "<RARE>"
 
 
-def get_vocab_idx(train, test):
+def get_vocab_idx(train):
     tokens = set()
     for sent in train:
-        tokens.update(sent)
-    for sent in test:
         tokens.update(sent)
     tokens = sorted(list(tokens))
     return dict(zip(tokens, range(1, len(tokens)+1)))
